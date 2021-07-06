@@ -7,14 +7,17 @@ package keychain
 // Also see https://developer.apple.com/library/ios/documentation/Security/Conceptual/keychainServConcepts/01introduction/introduction.html .
 
 /*
-#cgo LDFLAGS: -framework CoreFoundation -framework Security
+#cgo CFLAGS: -x objective-c -fmodules -fblocks
+#cgo LDFLAGS: -framework CoreFoundation -framework Security -framework LocalAuthentication
 
 #include <CoreFoundation/CoreFoundation.h>
 #include <Security/Security.h>
+#import <LocalAuthentication/LocalAuthentication.h>
 */
 import "C"
 import (
 	"fmt"
+	"log"
 	"time"
 )
 
@@ -168,6 +171,20 @@ var (
 	ModificationDateKey = attrKey(C.CFTypeRef(C.kSecAttrModificationDate))
 )
 
+// AccessControl is the items access control settings
+type AccessControl int
+
+const (
+	AccessControlDefault      AccessControl = 0
+	AccessControlUserPresence               = 1
+)
+
+// AccessControlKey is for kSecAttrAccessControl
+var AccessControlKey = attrKey(C.CFTypeRef(C.kSecAttrAccessControl))
+var accessControlTypeRef = map[AccessControl]C.SecAccessControlCreateFlags{
+	AccessControlUserPresence: C.kSecAccessControlUserPresence,
+}
+
 // Synchronizable is the items synchronizable status
 type Synchronizable int
 
@@ -310,6 +327,25 @@ func (k *Item) SetAccessible(accessible Accessible) {
 	} else {
 		delete(k.attr, AccessibleKey)
 	}
+}
+
+func (k *Item) SetAccessControl(accessControl AccessControl) {
+	var flagsRef = accessControlTypeRef[accessControl]
+	var accessibleRef = k.attr[AccessibleKey].(C.CFTypeRef)
+
+	var err C.CFErrorRef
+	var control = C.SecAccessControlCreateWithFlags(
+		C.kCFAllocatorDefault,
+		accessibleRef,
+		flagsRef,
+		&err,
+	)
+
+	if err != 0 {
+		log.Printf("error")
+	}
+
+	k.attr[AccessControlKey] = control
 }
 
 // SetMatchLimit sets the match limit
